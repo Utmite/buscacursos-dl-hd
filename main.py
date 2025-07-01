@@ -11,14 +11,13 @@ import logging
 import sys
 
 
-
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger()
 
 cookies = ""
 if os.path.exists(".cred"):
     try:
-        with open(".cred", 'r') as file:
+        with open(".cred", "r") as file:
             cookies = file.read()
         log.info(f"using cookies = '{cookies}'")
     except Exception:
@@ -35,8 +34,7 @@ for i in reversed(range(len(args))):
         args.pop(i)
 
 if len(args) == 0:
-    print(
-        "usage: python3 main.py [options] [periods...]")
+    print("usage: python3 main.py [options] [periods...]")
     print("  options:")
     print("    --skip-program       Do not fetch course program text.")
     print("    --skip-requirements  Do not fetch course requirements information.")
@@ -55,7 +53,7 @@ settings = {
     "fetch-program": "skip-program" not in opts,
     "fetch-quota": "skip-quota" not in opts,
     "fetch-requirements": "skip-requirements" not in opts,
-    "disable-cache": "disable-cache" in opts
+    "disable-cache": "disable-cache" in opts,
 }
 
 if not settings.get("disable-cache"):
@@ -77,9 +75,9 @@ else:
         print(f"period[{period}]")
         courses = CollectCourses()
         courses.collect(period, settings)
-        for course in courses.courses.values():
-            course['sections'] = dict(
-                sorted(course["sections"].items(), key=lambda x: int(x[0])))
-        data[period] = dict(sorted(courses.courses.items()))
-    data = dict(sorted(data.items(), reverse=True))
-    json.dump(data, sys.stdout)
+    #     for course in courses.courses.values():
+    #         course['sections'] = dict(
+    #             sorted(course["sections"].items(), key=lambda x: int(x[0])))
+    #     data[period] = dict(sorted(courses.courses.items()))
+    # data = dict(sorted(data.items(), reverse=True))
+    # json.dump(data, sys.stdout)
