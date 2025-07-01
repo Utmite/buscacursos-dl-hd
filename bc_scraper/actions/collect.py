@@ -1,3 +1,4 @@
+from itertools import product
 import logging
 import json
 import string
@@ -147,13 +148,13 @@ class CollectCoursesOptimized:
             "lock": mgr.Lock(),
         }
 
-        LETTERS = string.ascii_uppercase
         NUMBERS = string.digits
         MAX_WORKERS = min(10, multiprocessing.cpu_count())
 
-        prefixes = list(LETTERS)
+        LETTERS = string.ascii_uppercase
+        prefixes = ["".join(p) for p in product(LETTERS, repeat=2)]
 
-        for depth in range(1, 6):
+        for depth in range(2, 6):
             if not prefixes:
                 break
 
