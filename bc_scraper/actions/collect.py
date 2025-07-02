@@ -154,7 +154,7 @@ class CollectCoursesOptimized:
         LETTERS = string.ascii_uppercase
         # Según mis pruebas, hacer [AAA, AAB, AAC,..., ZZX, ZZY, ZZZ] es mejor
         # creo que se debe a que busca cursos tiene un index y la consulta http que es lo que hace que se demore
-        # las consultas es mas rapido
+        # se responden más rápido cuando se hace con prefijos de 3 letras
         #
         # Al buscar AAA vs AA en la web de busca cursos, tambien se nota la diferencia en velocidad (Rocka, 2025-07-01)
         prefixes = ["".join(p) for p in product(LETTERS, repeat=3)]
