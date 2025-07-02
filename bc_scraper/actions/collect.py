@@ -152,9 +152,14 @@ class CollectCoursesOptimized:
         MAX_WORKERS = min(10, multiprocessing.cpu_count())
 
         LETTERS = string.ascii_uppercase
-        prefixes = ["".join(p) for p in product(LETTERS, repeat=2)]
+        # Según mis pruebas, hacer [AAA, AAB, AAC,..., ZZX, ZZY, ZZZ] es mejor
+        # creo que se debe a que busca cursos tiene un index y la consulta http que es lo que hace que se demore
+        # las consultas es mas rapido
+        #
+        # Al buscar AAA vs AA en la web de busca cursos, tambien se nota la diferencia en velocidad (Rocka, 2025-07-01)
+        prefixes = ["".join(p) for p in product(LETTERS, repeat=3)]
 
-        for depth in range(2, 6):
+        for depth in range(3, 6):
             if not prefixes:
                 break
 
@@ -180,7 +185,7 @@ class CollectCoursesOptimized:
                     for task in tasks
                 }
                 batch_results = []
-                batch_size = 5
+                batch_size = 50
 
                 for future in as_completed(future_to_task):
                     try:
