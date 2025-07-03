@@ -149,7 +149,7 @@ class CollectCoursesOptimized:
         }
 
         NUMBERS = string.digits
-        MAX_WORKERS = min(10, multiprocessing.cpu_count())
+        MAX_WORKERS = 15
 
         LETTERS = string.ascii_uppercase
         # Según mis pruebas, hacer [AAA, AAB, AAC,..., ZZX, ZZY, ZZZ] es mejor
@@ -185,7 +185,7 @@ class CollectCoursesOptimized:
                     for task in tasks
                 }
                 batch_results = []
-                batch_size = 50
+                batch_size = 120
 
                 for future in as_completed(future_to_task):
                     try:
