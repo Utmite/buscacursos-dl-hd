@@ -44,6 +44,7 @@ def _process_and_count_optimized(args):
                 req, con, restr, equiv = get_requirements(cfg, c["initials"])
 
             local_courses[c["initials"]] = {
+                "sigle": c["initials"],
                 "name": c["name"],
                 "credits": c["credits"],
                 "req": req,
@@ -61,7 +62,8 @@ def _process_and_count_optimized(args):
         quota = banner_quota(cfg, c["nrc"], period) if cfg.get("fetch-quota") else {}
         sec = {
             "nrc": c["nrc"],
-            "schedule": process_schedule(c["schedule"]),
+            "section": c["section"],
+            "schedule": c["schedule"],
             "format": c["format"],
             "campus": c["campus"],
             "is_english": c["is_english"],
@@ -185,7 +187,7 @@ class CollectCoursesOptimized:
                     for task in tasks
                 }
                 batch_results = []
-                batch_size = 120
+                batch_size = 1_000
 
                 for future in as_completed(future_to_task):
                     try:
@@ -194,12 +196,13 @@ class CollectCoursesOptimized:
                         batch_results.append(result)
                         completed += 1
 
-                        if completed % 10 == 0 or completed == len(tasks):
+                        if completed % 300 == 0 or completed == len(tasks):
                             self._log_progress(depth, completed, len(tasks), results)
 
                         if len(batch_results) >= batch_size:
                             _merge_results(shared, batch_results, json_path)
                             batch_results = []
+
                     except Exception as e:
                         task = future_to_task[future]
                         log.error(f"Error procesando {task[0]}: {e}")

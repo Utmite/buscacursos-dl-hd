@@ -1,104 +1,157 @@
-import logging
+from html.parser import HTMLParser
 from time import sleep
-from typing import List, Dict, Union
-from lxml import html
 
 from .request import get_text
+import logging
+from typing import List, Dict, Tuple, Union, Optional
 
 log = logging.getLogger("scraper")
 
 
-def bc_search(
-    cfg, query: str, period: str, nrc: bool = False
-) -> List[Dict[str, Union[str, bool, int]]]:
+from typing import Dict, List
+
+
+def process_schedule(text_sc: str) -> Dict[str, List[str]]:
+    """For a given schedule text in BC format, returns the SQL queries for inserting
+    the full schedule and schedule info. Those queries have to format ID.
     """
-    Parser rápido usando lxml para extraer resultados de busacursos.uc.cl
-    """
-    # Construir URL
+    # Full Schedule
+    data = text_sc.split("\nROW: ")[1:]
+    # data rows -> day-day:module,module <> type <> room <><>
+    schedule: Dict[str, List[str]] = {}
+    for row in data:
+        row = row.split("<>")
+        while len(row) > 0 and row[-1] == "":
+            row.pop()
+        horario = row[0].split(":")
+        days = horario[0].split("-")
+        modules = horario[1].split(",")
+        for day in days:
+            for mod in modules:
+                if len(day) and len(mod):
+                    schedule[day.lower() + mod] = row[1:]
+    return schedule
+
+
+class _BCParser(HTMLParser):
+    toogle: bool
+    nested: int
+    text: str
+    current_school: str
+    courses: List[Dict[str, Union[str, bool, int]]]
+
+    def __init__(self):
+        super().__init__()
+        self.toogle = False
+        self.nested = 0
+        self.text = ""
+        self.current_school = ""
+        self.courses = []
+
+    def handle_starttag(self, tag: str, attrs: List[Tuple[str, Optional[str]]]):
+        if tag == "tr" and (
+            ("class", "resultadosRowPar") in attrs
+            or ("class", "resultadosRowImpar") in attrs
+        ):
+            self.toogle = True
+        elif tag == "tr" and self.toogle:
+            self.nested += 1
+            self.text += f"<{tag}>"
+        elif self.toogle:
+            self.text += f"<{tag}>"
+
+        if tag == "td" and ("colspan", "18") in attrs:
+            self.current_school = "*"
+
+    def handle_endtag(self, tag: str):
+        if tag == "tr" and self.toogle:
+            if self.nested:
+                self.nested -= 1
+            else:
+                self.toogle = False
+                self.process_course()
+                self.text = ""
+        elif self.toogle:
+            self.text += f"</{tag}>"
+            if tag == "td":
+                self.text += "\n"
+
+    def handle_data(self, data: str):
+        if self.toogle:
+            data = data.strip()
+            self.text += data
+
+        if self.current_school == "*":
+            self.current_school = data
+
+    def process_course(self):
+        data = self.text.strip().split("\n")
+        for index in range(len(data)):
+            # data[index] = data[index][4:-5] # strip <td> </td>
+            data[index] = data[index].replace("<td>", "").replace("</td>", "")
+            data[index] = data[index].replace("<br>", "").replace("</br>", "")
+
+        course = {
+            "nrc": data[0],
+            "initials": data[1][data[1].index("</img>") + 6 : data[1].index("</div>")],
+            "is_removable": False if data[2] == "NO" else True,
+            "is_english": False if data[3] == "NO" else True,
+            "section": int(data[4]),
+            "is_special": False if data[5] == "NO" else True,
+            "area": data[6],
+            "format": data[7][:16],
+            "category": data[8],
+            "name": data[9],
+            "teachers": data[10].replace("<a>", "").replace("</a>", ""),
+            "campus": data[11],
+            "credits": int(data[12]),
+            "total_quota": int(data[13]),
+            "available_quota": int(data[14]),
+            "schedule": "<>".join(data[16:]).replace("<tr>", "\nROW: "),
+            "school": self.current_school,
+        }
+        # Quick horario processing
+        course["schedule"] = course["schedule"].replace("<a>", "").replace("</a>", "")
+        course["schedule"] = (
+            course["schedule"].replace("<table>", "").replace("</table>", "")
+        )
+        course["schedule"] = (
+            course["schedule"].replace("<img>", "").replace("</img>", "")
+        )
+
+        course["schedule"] = process_schedule(course["schedule"])
+
+        # Turn profesor Apellido Nombre to Nombre Apellido
+        if course["teachers"] not in [
+            "Dirección Docente",
+            "(Sin Profesores)",
+            "Por Fijar",
+        ]:
+            course["teachers"] = ",".join(
+                [
+                    prof.split(" ")[-1] + " " + " ".join(prof.split(" ")[:-1])
+                    for prof in course["teachers"].split(",")
+                ]
+            )
+
+        self.courses.append(course)
+
+
+# Search
+def bc_search(cfg, query: str, period: str, nrc: bool = False):
+    parser = _BCParser()
+    url = None
     if nrc:
         url = f"https://buscacursos.uc.cl/?cxml_semestre={period}&cxml_nrc={query}"
     else:
         url = f"https://buscacursos.uc.cl/?cxml_semestre={period}&cxml_sigla={query}"
+    resp = get_text(cfg, url)
 
-    resp_text = get_text(cfg, url)
-    if len(resp_text) < 1000:
-        log.warning("Respuesta muy corta: posible bloqueo. Reintentando...")
+    # Check valid response
+    if len(resp) < 1000:
+        log.warn("Too many request prevention")
         sleep(5)
-        resp_text = get_text(cfg, url)
+        resp = get_text(cfg, url)
 
-    # Parsear con lxml
-    tree = html.fromstring(resp_text)
-    # Buscar todas las filas de resultados
-    rows = tree.xpath(
-        '//tr[contains(@class, "resultadosRowPar") or contains(@class, "resultadosRowImpar")]'
-    )
-
-    courses: List[Dict[str, Union[str, bool, int]]] = []
-    current_school: str = ""
-
-    for row in rows:
-        # Detectar encabezado de escuela
-        if row.xpath('.//td[@colspan="18"]'):
-            school_name = row.text_content().strip()
-            current_school = school_name
-            continue
-
-        cells = [td.text_content().strip() for td in row.xpath(".//td")]
-        if len(cells) < 15:
-            continue
-
-        # Extraer datos básicos
-        nrc = cells[0]
-        initials_block = cells[1]
-        # Si hay etiqueta </img> y </div>
-        if "</img>" in initials_block and "</div>" in initials_block:
-            initials = initials_block.split("</img>")[-1].split("</div>")[0]
-        else:
-            initials = initials_block
-
-        course: Dict[str, Union[str, bool, int]] = {
-            "nrc": nrc,
-            "initials": initials,
-            "is_removable": cells[2] != "NO",
-            "is_english": cells[3] != "NO",
-            "section": int(cells[4] or 0),
-            "is_special": cells[5] != "NO",
-            "area": cells[6],
-            "format": cells[7][:16],
-            "category": cells[8],
-            "name": cells[9],
-            "teachers": cells[10],
-            "campus": cells[11],
-            "credits": int(cells[12] or 0),
-            "total_quota": int(cells[13] or 0),
-            "available_quota": int(cells[14] or 0),
-            "schedule": "",
-            "school": current_school,
-        }
-
-        # Procesar horario si existen más celdas
-        if len(cells) > 16:
-            # Reconstruir HTML de celdas horario
-            sched_elements = row.xpath(".//td[position() > 16]")
-            sched_texts = []
-            for cell in sched_elements:
-                # eliminar tags internos y obtener texto
-                sched_texts.append(cell.text_content().strip())
-            course["schedule"] = "\nROW: ".join(sched_texts)
-
-        # Reordenar nombres de profesores Apellido Nombre -> Nombre Apellido
-        bad_names = {"Dirección Docente", "(Sin Profesores)", "Por Fijar"}
-        if course["teachers"] not in bad_names:
-            profs = [p for p in course["teachers"].split(",") if p]
-            reordered = []
-            for prof in profs:
-                parts = prof.split()
-                if len(parts) > 1:
-                    reordered.append(" ".join(parts[1:] + parts[:1]))
-                else:
-                    reordered.append(prof)
-            course["teachers"] = ",".join(reordered)
-
-        courses.append(course)
-
-    return courses
+    parser.feed(resp)
+    return parser.courses
