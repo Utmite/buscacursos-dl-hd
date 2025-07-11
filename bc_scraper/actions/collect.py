@@ -139,7 +139,8 @@ class CollectCoursesOptimized:
                 f"Encontrados: {total_found} - ETA: {eta:.1f}s"
             )
 
-    def collect(self, period: str, cfg: dict, json_path: str = "courses_snapshot.json"):
+    def collect(self, period: str, cfg: dict):
+        json_path: str = f"{period}.json"
         self.start_time = time.time()
 
         mgr = multiprocessing.Manager()
