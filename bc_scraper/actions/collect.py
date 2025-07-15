@@ -69,6 +69,7 @@ def _process_and_count_optimized(args):
             "is_english": c["is_english"],
             "is_removable": c["is_removable"],
             "is_special": c["is_special"],
+            "category": c["category"],
             "total_quota": c["total_quota"],
             "quota": quota,
         }
@@ -152,7 +153,7 @@ class CollectCoursesOptimized:
         }
 
         NUMBERS = string.digits
-        MAX_WORKERS = 15
+        MAX_WORKERS = 15  # 1000 segundos sin tener cache
 
         LETTERS = string.ascii_uppercase
         # Según mis pruebas, hacer [AAA, AAB, AAC,..., ZZX, ZZY, ZZZ] es mejor
@@ -160,9 +161,13 @@ class CollectCoursesOptimized:
         # se responden más rápido cuando se hace con prefijos de 3 letras
         #
         # Al buscar AAA vs AA en la web de busca cursos, tambien se nota la diferencia en velocidad (Rocka, 2025-07-01)
-        prefixes = ["".join(p) for p in product(LETTERS, repeat=3)]
 
-        for depth in range(3, 6):
+        N = 2  # Cantidad de letras en el prefijo inicial, si es 1 es #A, B, ... si es 2 es AA, AB, ..., ZZ, si es 3 es AAA, AAB, ..., ZZZ,
+        # NO USAR MAS DE 3 o menos de 1
+
+        prefixes = ["".join(p) for p in product(LETTERS, repeat=N)]
+
+        for depth in range(N, 6):
             if not prefixes:
                 break
 
