@@ -12,12 +12,16 @@ from ..scraper.programs import get_program
 from ..scraper.requirements import get_requirements
 from ..scraper.banner import banner_quota
 from .schedule import process_schedule
+import os
 
 log = logging.getLogger("scraper")
 
 
 def _process_and_count_optimized(args):
     comb, period, cfg, processed_nrcs, processed_initials = args
+
+    pid = os.getpid()
+    log.info(f"[PID {pid}] Procesando combinación: {comb} para el período: {period}")
 
     found = bc_search(cfg, comb, period)
     if cfg.get("testmode", False) and len(found) > 10:
